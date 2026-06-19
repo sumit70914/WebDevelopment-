@@ -1,0 +1,6 @@
+{
+  "name": "SumiTech Studio",
+  "description": "An interactive digital showroom and marketplace built by Sumit, where clients can explore, inspect, and purchase premium website templates and custom systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,135 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents an authenticated client profile in the portal system",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth unique identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "User's display or billing name"
+        },
+        "email": {
+          "type": "string",
+          "description": "Sanitized client communication email"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Profile provisioning server timestamp"
+        }
+      },
+      "required": ["uid", "name", "email", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Represents a purchased website draft or template order",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the checkout order"
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Referenced website catalog draft template index"
+        },
+        "templateTitle": {
+          "type": "string",
+          "description": "Visual title of the purchased concept"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customizable checkout billing name"
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "E-receipt and profile pairing email address"
+        },
+        "price": {
+          "type": "number",
+          "description": "Contract rate paid for custom concept execution in INR"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "requirements_review", "in_development", "delivered"],
+          "description": "Active design cycle status"
+        },
+        "licenseKey": {
+          "type": "string",
+          "description": "Unique activation licensing signature"
+        },
+        "customRequirements": {
+          "type": "string",
+          "description": "Detailed custom features written by the client"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last modified timestamp"
+        }
+      },
+      "required": ["id", "templateId", "templateTitle", "customerName", "customerEmail", "price", "status", "licenseKey"]
+    },
+    "SupportMessage": {
+      "title": "SupportMessage",
+      "description": "Represents a historical customer support dialog row",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Support row identifier"
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "Matching customer billing email"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Client profile name"
+        },
+        "message": {
+          "type": "string",
+          "description": "Encrypted or regular support text message content"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Message submission timestamp"
+        },
+        "sender": {
+          "type": "string",
+          "enum": ["customer", "admin"],
+          "description": "Identity of the message origin"
+        }
+      },
+      "required": ["id", "customerEmail", "customerName", "message", "timestamp", "sender"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Primary isolated workspace for authenticated customer sessions"
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "User's inherited list of purchased products and builds"
+    },
+    "/users/{userId}/supportMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/SupportMessage" },
+      "description": "Private ticket chat items isolated to a specific customer profile"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Shared template order record secured by user owner attributes"
+    },
+    "/supportMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/SupportMessage" },
+      "description": "Shared chat rows filtered directly by user auth credentials"
+    }
+  }
+}

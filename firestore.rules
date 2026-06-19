@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Decline-All Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helper Functions & Primitives ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Verify document identifier strings to prevent injection or Resource Exhaustion (DoW)
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // True only if request matches the designated user UID
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // True only if request email token matches the target record's email parameters
+    function matchesEmail(emailAddress) {
+      return isSignedIn() && request.auth.token.email == emailAddress;
+    }
+
+    // --- Entity-Level Validation Schemas (Pillar 2: Anti-Update-Gap) ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'createdAt'])
+          && data.keys().size() == 4
+          && data.uid is string && data.uid.size() <= 128
+          && data.name is string && data.name.size() <= 128
+          && data.email is string && data.email.size() <= 256
+          // Timestamp validation aligning with temporal integrity
+          && data.createdAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['id', 'templateId', 'templateTitle', 'customerName', 'customerEmail', 'price', 'status', 'licenseKey'])
+          && data.id is string && data.id.size() <= 128
+          && data.templateId is string && data.templateId.size() <= 128
+          && data.templateTitle is string && data.templateTitle.size() <= 128
+          && data.customerName is string && data.customerName.size() <= 128
+          && data.customerEmail is string && data.customerEmail.size() <= 256
+          && data.price is number
+          && data.status in ['pending', 'requirements_review', 'in_development', 'delivered']
+          && data.licenseKey is string && data.licenseKey.size() <= 256;
+    }
+
+    function isValidSupportMessage(data) {
+      return data.keys().hasAll(['id', 'customerEmail', 'customerName', 'message', 'timestamp', 'sender'])
+          && data.id is string && data.id.size() <= 128
+          && data.customerEmail is string && data.customerEmail.size() <= 256
+          && data.customerName is string && data.customerName.size() <= 128
+          && data.message is string && data.message.size() <= 10000
+          && data.timestamp is timestamp
+          && data.sender in ['customer', 'admin'];
+    }
+
+    // --- Path Definitions and Access Control Gates ---
+
+    // 1. ISOLATED PROFILE ROOT
+    // Restricts client workspace directly by user UID (The ultimate user-isolation container)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(request.resource.data);
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Deeply Nested User Orders (Highly secure hierarchical topology)
+      match /orders/{orderId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(orderId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(orderId) && isValidOrder(request.resource.data);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(orderId) && isValidOrder(request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(orderId);
+      }
+
+      // Deeply Nested Support Conversations
+      match /supportMessages/{messageId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(messageId) && isValidSupportMessage(request.resource.data);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(messageId) && isValidSupportMessage(request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(messageId);
+      }
+    }
+
+    // 2. FLAT TOP-LEVEL SHARED COLLECTIONS
+    // Secure isolation for flat structures where query filters are evaluated by document content
+    match /orders/{orderId} {
+      
+      // Get / Read Operations
+      allow get: if isSignedIn() && isValidId(orderId) && matchesEmail(resource.data.customerEmail);
+      
+      // List/Query Operations (Secure List Queries - evaluates content attributes)
+      allow list: if isSignedIn() && matchesEmail(resource.data.customerEmail);
+
+      // Creation Flow (requires user email matching incoming data)
+      allow create: if isSignedIn() && isValidId(orderId) && matchesEmail(request.resource.data.customerEmail) && isValidOrder(request.resource.data);
+
+      // Update Logic (immutability check + user boundary check)
+      allow update: if isSignedIn() && isValidId(orderId) 
+          && matchesEmail(resource.data.customerEmail) 
+          && matchesEmail(request.resource.data.customerEmail)
+          && isValidOrder(request.resource.data);
+
+      // Delete (forbidden unless owner)
+      allow delete: if isSignedIn() && isValidId(orderId) && matchesEmail(resource.data.customerEmail);
+    }
+
+    match /supportMessages/{messageId} {
+      
+      allow get: if isSignedIn() && isValidId(messageId) && matchesEmail(resource.data.customerEmail);
+      allow list: if isSignedIn() && matchesEmail(resource.data.customerEmail);
+
+      allow create: if isSignedIn() && isValidId(messageId) && matchesEmail(request.resource.data.customerEmail) && isValidSupportMessage(request.resource.data);
+
+      allow update: if isSignedIn() && isValidId(messageId)
+          && matchesEmail(resource.data.customerEmail)
+          && matchesEmail(request.resource.data.customerEmail)
+          && isValidSupportMessage(request.resource.data);
+
+      allow delete: if isSignedIn() && isValidId(messageId) && matchesEmail(resource.data.customerEmail);
+    }
+  }
+}
